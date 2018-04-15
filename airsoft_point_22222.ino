@@ -1,22 +1,24 @@
-// Pin 13 has an LED connected on most Arduino boards.
-// give it a name:
-
+//Для работы необходима установка библиотеки LiquidCrystal_I2C
+//
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-unsigned long prev_ms = 0;
-int print_sw_1 = 0;
-int sw_st = 0;
-int timer_sw = 10;
-int storona = 0;
-int prev_storona = 0;
-int button_blue = 8;
-int button_green = 9;
-long timer_1 = 300;
-int timer_2 = 60;
-int score_blue = 0;
-int score_green = 0;
-LiquidCrystal_I2C lcd(0x3F,16,2);
-byte ch[8] = {
+int lcd_col = 16; //Количество символов в одном ряду экрана LCD
+unsigned long prev_ms = 0; //ХЗ что это
+int print_sw_1 = 0; //ХЗ что это
+int sw_st = 0;  //Сторона которая удерживает точку Синие - 1 зеленые - 2
+int timer_sw = 10; //Таймер включения
+//int storona = 0; //Текущая сторона владеющая точкой
+int prev_storona = 0; //Сторона которая владела точкой до начала захвата
+int button_blue = 8; //Пин подключения кнопки Синей стороны
+int button_green = 9; //Пин подключения кнопки Зеленой стороны
+long timer_score_default = 300; //Количество секунд требуемое для удержания точки
+long timer_score = timer_score_default; //Количество секунд требуемое для удержания точки
+int timer_zahvat_default = 60; //Количество секунд необходимое для захвата точки
+//int timer_zahvat = timer_zahvat_default; //Количество секунд необходимое для захвата точки
+int score_blue = 0; //Количество очков синей стороны
+int score_green = 0;  //Количество очков зеленой стороны
+LiquidCrystal_I2C lcd(0x3F,lcd_col,2); // Инициация дисплея
+byte ch[8] = {  //Инициирование буквы "ч"
   B00000,
   B00000,
   B10001,
@@ -26,7 +28,7 @@ byte ch[8] = {
   B00001,
   B00000
 };
-byte k[8] = {
+byte k[8] = { //Инициирование буквы "к"
   B00000,
   B00000,
   B10010,
@@ -36,7 +38,7 @@ byte k[8] = {
   B10010,
   B00000
 };
-byte n[8] = {
+byte n[8] = { //Инициирование буквы "н"
   B00000,
   B00000,
   B10001,
@@ -46,7 +48,7 @@ byte n[8] = {
   B10001,
   B00000
 };
-byte t[8] = {
+byte t[8] = { //Инициирование буквы "т"
   B00000,
   B00000,
   B11111,
@@ -56,7 +58,7 @@ byte t[8] = {
   B00100,
   B00000
 };
-byte l[8] = {
+byte l[8] = {//Инициирование буквы "л"
   B00000,
   B00000,
   B01111,
@@ -66,7 +68,7 @@ byte l[8] = {
   B01001,
   B00000
 };
-byte v[8] = {
+byte v[8] = {//Инициирование буквы "в"
   B00000,
   B00000,
   B11100,
@@ -76,7 +78,7 @@ byte v[8] = {
   B11100,
   B00000
 };
-byte z[8] = {
+byte z[8] = { //Инициирование буквы "з"
   B00000,
   B00000,
   B11110,
@@ -86,7 +88,7 @@ byte z[8] = {
   B11110,
   B00000
 };
-byte bl[8] = {
+byte bl[8] = {  //Инициирование буквы "ы"
   B00000,
   B00000,
   B10001,
@@ -97,11 +99,11 @@ byte bl[8] = {
   B00000
 };
 void setup() {
-  pinMode(button_blue, INPUT);
-  pinMode(button_green, INPUT);
-  lcd.begin(16, 2);
+  pinMode(button_blue, INPUT); //Инициируем кнопку синих
+  pinMode(button_green, INPUT); //Инициируем кнопку зеленых
+  lcd.begin(lcd_col,2);
   lcd.init();
-  lcd.createChar(16, ch);
+  lcd.createChar(16, ch);  //Инициируем алфавит
   lcd.createChar(1, k);
   lcd.createChar(2, n);
   lcd.createChar(3, t);
@@ -109,78 +111,79 @@ void setup() {
   lcd.createChar(5, v);
   lcd.createChar(6, z);
   lcd.createChar(7, bl);
-  lcd.backlight();
+  lcd.backlight();  //Включаем подсветку
 }
 
-// the loop routine runs over and over again forever:
-void loop() {
-dbl_btn_clk();
-if(sw_st==1){
-    if (print_sw_1 == 1){
-      print_sw_1 = 0;}
-if (storona == 0){
-    lcd.setCursor(0,0);
-    say_neitral(0,0);
-  } else {
-    say_tochka_zahvachena(0,0);
-    nabor_ochkov(storona);
-  }
-  if((digitalRead(button_blue)==HIGH)&&(storona != 1)){
-    prev_storona = storona;
-    zahvat(1);
-  }
-  if((digitalRead(button_green)==HIGH)&&(storona != 2)){
-    prev_storona = storona;
-    zahvat(2);
-  }
-  } else {
-    if(print_sw_1 == 0){
-      lcd.setCursor(0,0);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      say_sinie(0,0);
-      say_zelenie(9,0);
-      lcd.setCursor(2,1);
-      lcd.print(score_blue);
+
+void loop() 
+{
+if(sw_st!=0) //Если точка кому-то принадлежит
+  {
+    say_tochka_zahvachena(0,0); //Написать что она захвачена
+    if(sw_st == 1)  //Если Синие
+    {
+      say_sinie(0,1); //Написать синие
+      clean_sim(9,1);
+      lcd.setCursor(9,1);
+      lcd.print(score_blue);  //И количество очков
+    } else {
+      say_zelenie(0,1); //Написать зеленые
+      clean_sim(9,1);
+      lcd.setCursor(9,1);
+      lcd.print(score_green); //И количество очков
+    }
+    if(timer_score>0) //Если таймер больше 0
+    {
+      timer_score--;  //Уменьшить таймер на 1
       lcd.setCursor(12,1);
-      lcd.print(score_green);
-      print_sw_1 = 1;
+      lcd.print(timer_score); //напечатать количество секунд до захвата
+    } else {  //Если таймер 0
+      if(sw_st == 1){ //Если удерживают синие
+        score_blue++; //Приплюсовать им 1 очко
+        timer_score = timer_score_default;  //Сбросить таймер
+      } else {  //Если удерживают зеленые
+        score_green++;//Приплюсовать им 1 очко
+        timer_score = timer_score_default;//Сбросить таймер
+      }
     }
-  }
-  delay(505);
-}
-void zahvat(int a){
-  lcd.setCursor(0, 0);
-  lcd.print("                ");
-  say_zahvat_tochki(2,0);
-  while(timer_2>0){
-    dbl_btn_clk();
-    lcd.setCursor(0, 1);
-    lcd.print("                ");
-    lcd.setCursor(7, 1);
-    lcd.print(timer_2);
-    timer_2--;
     delay(1000);
-    if ((digitalRead(button_blue)==HIGH)&&(prev_storona==1)){
-      timer_2 = 60;
-      return;
-    } else if ((digitalRead(button_green)==HIGH)&&(prev_storona==2)){
-      timer_2 = 60;
+    if_btn();  //Проверить нажатие кнопки
+  } else {
+    say_neitral(0,0); //Напечатать точка нейтральна
+    if_btn();  //Проверить нажатие кнопки
+    delay(1000);
+  }
+}
+void zahvat(int st){
+  lcd.clear();
+  int prev_st = sw_st;
+  say_zahvat_tochki(2,0);
+  int timer = timer_zahvat_default;
+  while(timer>0){
+    if((digitalRead(button_blue)==HIGH)&&(prev_st==1)){
       return;
     }
+    if((digitalRead(button_green)==HIGH)&&(prev_st==2)){
+      return;
+    }
+    clean_sim(7,1);
+    lcd.setCursor(7, 1);
+    lcd.print(timer);
+    delay(1000);
+    timer--;
   }
-  storona = a;
-  timer_2 = 60;
-  timer_1 = 300;
-  prev_ms = millis();
+  sw_st = st;
+}
+void clean_sim(int a, int b){
+  lcd.setCursor (a, b);
+  char Str[lcd_col-a];
+  for(int i = 0; i < lcd_col-a; i++){
+    Str[i]=' ';
+  }
+  lcd.print(Str);
 }
 void say_zahvat_tochki(int a, int b){
-  lcd.setCursor (a, b);
-for (int i = a; i < 16-a; ++i)
-{
-  lcd.print(' ');
-}
+  clean_sim(a, b);
   lcd.setCursor(a, b);
   lcd.print("3ax");
   lcd.print(char(5));
@@ -195,6 +198,7 @@ for (int i = a; i < 16-a; ++i)
 }
 
 void say_tochka_zahvachena(int a, int b){
+  clean_sim(a, b);
   lcd.setCursor(a, b);
   lcd.print("To");
   lcd.print(char(0));
@@ -211,12 +215,14 @@ void say_tochka_zahvachena(int a, int b){
   lcd.print("a:");
 }
 void say_sinie(int a, int b){
+  clean_sim(a, b);
   lcd.setCursor(a, b);
   lcd.print("Cu");
   lcd.print(char(2));
   lcd.print("ue");
 }
 void say_neitral(int a, int b){
+  lcd.clear();
   lcd.setCursor(a, b);
   lcd.print("To");
   lcd.print(char(0));
@@ -234,6 +240,7 @@ void say_neitral(int a, int b){
   lcd.print("                ");
 }
 void say_zelenie(int a, int b){
+  clean_sim(a, b);
   lcd.setCursor(a, b);
   lcd.print("3e");
   lcd.print(char(4));
@@ -242,77 +249,13 @@ void say_zelenie(int a, int b){
   lcd.print(char(7));
   lcd.print("e");
 }
-void nabor_ochkov(int a){
-  say_tochka_zahvachena(0,0);
-  if(a == 1){
-    lcd.setCursor(0,1);
-    lcd.print("                ");
-    say_sinie(0,1);
-    lcd.setCursor(9,1);
-    lcd.print(score_blue);
-    lcd.setCursor(13,1);
-    lcd.print("   ");
-    lcd.setCursor(12,1);
-    lcd.print(timer_1);
-    if((millis()-prev_ms)>=1000){
-      timer_1--;
-      prev_ms = millis();
+void if_btn(){
+  if ((digitalRead(button_blue)==HIGH)||(digitalRead(button_green)==HIGH)){
+    if ((digitalRead(button_blue)==HIGH)&&(sw_st!=1)){
+      zahvat(1);
+    } else if ((digitalRead(button_green)==HIGH)&&(sw_st!=2)){
+      zahvat(2);
     }
-    if (timer_1 < 0){
-      score_blue++;
-      timer_1 = 300;
-      prev_ms = millis();
-    }
-  } else if (a == 2){   
-    lcd.setCursor(0,1);
-    lcd.print("                ");
-    say_zelenie(0,1);
-    lcd.setCursor(9,1);
-    lcd.print(score_green);
-    lcd.setCursor(13,1);
-    lcd.print(timer_1);
-    if((millis()-prev_ms)>=1000){
-      timer_1--;
-      prev_ms = millis();
-    }
-    if (timer_1 < 0){
-      score_green++;
-      timer_1 = 300;
-      prev_ms = millis();
-    }
-  } else {
-    lcd.print("Neitral");
   }
-}
-void dbl_btn_clk(){
-  if((digitalRead(button_blue)==HIGH)&&(digitalRead(button_green)==HIGH)){
-  if (timer_sw==0){
-    if(sw_st==1){
-      sw_st = 0;
-      lcd.setCursor(0,0);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(8,0);
-      lcd.print("Ok");
-      delay(5000);
-    } else {
-      sw_st = 1;
-      lcd.setCursor(0,0);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(8,0);
-      lcd.print("Ok");
-      delay(5000);
-    }
-    timer_sw = 10;
-  } else {
-    timer_sw--;
-  }
-} else {
-  timer_sw = 10;
-}
-return;
 }
 
